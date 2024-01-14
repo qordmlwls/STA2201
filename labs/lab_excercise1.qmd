@@ -1,0 +1,108 @@
+---
+title: "Lab Exercise 1 App stat"
+format: 
+  pdf:
+    fig-pos: "H"
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+dm <- read_table("https://www.prdh.umontreal.ca/BDLC/data/ont/Mx_1x1.txt", skip = 2, col_types = "dcddd")
+head(dm)
+```
+
+## 1.
+
+```{r}
+# Calculate ratio of female to male mortality rates
+mortality_ratio <- dm %>%
+  filter(Age %in% c(10, 20, 30, 40)) %>%
+  group_by(Year, Age) %>%
+  mutate(ratio = Female / Male) %>%
+  select(Year, Age, ratio)
+
+# Plot
+ggplot(mortality_ratio, aes(x = Year, y = ratio, color = as.factor(Age))) +
+  geom_line() +
+  labs(title = "Ratio of Female to Male Mortality Rates Over Time",
+       x = "Year",
+       y = "Female to Male Mortality Ratio",
+       color = "Age") +
+  # Change theme
+  theme_gray()
+
+```
+
+## 2.
+
+```{r}
+lowest_mortality_age <- dm %>%
+  group_by(Year) %>%
+  arrange(Female) %>%
+  slice(1) %>%
+  select(Year, Age, Female)
+# Lowest Female Mortality Rate Each Year
+lowest_mortality_age
+```
+
+## 3.
+We can calculate the standard deviation of mortality rates by age by running this code.
+```{r}
+std_dev_mortality <- dm %>%
+  group_by(Age) %>%
+  summarize(
+    across(c(Female, Male, Total), sd,na.rm = TRUE)
+  )
+
+std_dev_mortality
+```
+
+## 4.
+As we can see in the graph, male mortality rates consistently higher than female rates throughout the period observed.
+```{r}
+dm2 <- read_table("https://www.prdh.umontreal.ca/BDLC/data/ont/Population.txt", skip = 1)
+
+# Calculate the population-weighted average mortality rate
+weighted_mortality <- dm %>%
+  left_join(dm2, by = c("Year", "Age")) %>%
+  # Drop missing values
+  drop_na() %>%
+  group_by(Year) %>%
+  summarize(
+     weighted_average_mortality_female = weighted.mean(Female.x, w = Female.y, na.rm = TRUE),
+     weighted_average_mortality_male = weighted.mean(Male.x, w = Male.y, na.rm = TRUE)
+   )
+   
+# Plot the results
+ggplot(weighted_mortality, aes(x = Year)) +
+  geom_line(aes(y = weighted_average_mortality_female, color = "Female")) +
+  geom_line(aes(y = weighted_average_mortality_male, color = "Male")) +
+  scale_color_manual(values = c("Female" = "pink", "Male" = "blue")) +
+  labs(title = "Population Weighted Average Mortality Rate by Sex Over Time",
+       x = "Year",
+       y = "Weighted Mortality Rate",
+       color = "Sex") +
+  theme_minimal()
+
+```
+
+## 5.
+For a simple linear regression model with logged mortality rates as the outcome and age as the covariate, the notation of the simple linear regression is:
+$$log(MortalityRate) = \beta_0 + \beta_1Age + \epsilon$$
+The output of the summary suggests that
+$\beta_0 = −10.062281$ and $\beta_1 = 0.086891$. 
+The positive coefficient for Age suggests that the log of the mortality rate increases as age increases, which implies that the mortality rate itself also increases exponentially with age. Given the context of mortality data, this result is consistent with general expectations: as age increases, the risk of mortality typically increases.
+```{r}
+# Run the linear regression with logged mortality rates
+
+female_data <- dm %>%
+  # Transform data type since Age is Character
+  mutate(Age = as.integer(Age)) %>%
+  # There is 110+, which can't be converted to integer. This is coverted to NA. 
+  # Since we only care about Age under 106, we remove this.
+  drop_na() %>%
+  filter(Age < 106, Year == 2000) 
+model <- lm(log(Female) ~ Age, data = female_data)
+summary(model)
+```
