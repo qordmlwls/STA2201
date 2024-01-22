@@ -1,0 +1,250 @@
+---
+title: "lab_exercise2"
+format: pdf
+editor: visual
+---
+
+
+```{r}
+library(opendatatoronto)
+library(tidyverse)
+library(stringr)
+library(skimr) # EDA
+library(visdat) # EDA
+library(janitor)
+library(lubridate)
+library(ggrepel)
+
+
+# Load Data
+all_data <- list_packages(limit = 500) 
+res <- list_package_resources("996cfe8d-fb35-40ce-b569-698d51fc683b") # obtained code from searching data frame above
+res <- res |> mutate(year = str_extract(name, "202.?"))
+delay_2022_ids <- res |> filter(year==2022) |> select(id) |> pull()
+
+delay_2022 <- get_resource(delay_2022_ids)
+
+# Make the column names nicer to work with
+delay_2022 <- clean_names(delay_2022)
+# Delay code
+delay_codes <- get_resource("3900e649-f31e-4b79-9f20-4731bbfd94f7")
+
+# Data cleaning
+delay_2022 <- delay_2022 |> 
+  mutate(contains_yu_bd = str_detect(str_to_lower(line), "bd")&str_detect(str_to_lower(line), "yu")) |> 
+  mutate(line = ifelse(contains_yu_bd, ifelse(line=="YU/BD", line, "YU/BD"), line))  |> 
+  select(-contains_yu_bd) 
+
+
+delay_2022 <- delay_2022 |> filter(line %in% c("BD", "YU", "SHP", "SRT", "YU/BD"))
+# Delay reason
+delay_2022 <- delay_2022 |> 
+  left_join(delay_codes |> rename(code = `SUB RMENU CODE`, code_desc = `CODE DESCRIPTION...3`) |> select(code, code_desc)) 
+
+delay_2022 <- delay_2022 |>
+  mutate(code_srt = ifelse(line=="SRT", code, "NA")) |> 
+  left_join(delay_codes |> rename(code_srt = `SRT RMENU CODE`, code_desc_srt = `CODE DESCRIPTION...7`) |> select(code_srt, code_desc_srt))  |> 
+  mutate(code = ifelse(code_srt=="NA", code, code_srt),
+         code_desc = ifelse(is.na(code_desc_srt), code_desc, code_desc_srt)) |> 
+  select(-code_srt, -code_desc_srt)
+
+delay_2022 <- delay_2022 |> 
+  mutate(station_clean = ifelse(str_starts(station, "ST"), word(station, 1,2), word(station, 1)))
+```
+
+## 1 
+```{r}
+
+# Code to plot the top five stations with the highest mean delays, faceted by line
+delay_2022 |>
+  group_by(station_clean,line) |>
+  summarise(mean_delay=mean(min_delay)) |>
+  arrange(-mean_delay)|>
+  head(5) |>
+  ggplot(aes(x = station_clean,
+             y = mean_delay))+
+  geom_col()+
+  facet_wrap(~line)
+  
+  
+```
+
+## 2
+The regression model seems to have less explanation power on min_delay variable since adjusted r-squared is 0.1596. However, it appears that several code_desc and the line categories have significant associations with the min_delay variable. It seems that regression analysis result does not agree with the EDA since EDA shows that delays were caused by Fire and Rail Related Problem whereas regression result shows that Passenger related problem plays significant role in delay.
+```{r}
+# Restrict the dataset to delays greater than 0
+delay_2022_filtered <- delay_2022 |>
+  filter(min_delay > 0)
+
+# Identify the top 50% most frequent delay reasons
+top_reasons <- delay_2022_filtered |>
+  group_by(code_desc) |>
+  summarise(cnt = length(code_desc)) |>
+  arrange(desc(cnt)) |> 
+  mutate(cumulative_sum = cumsum(cnt)) |>
+  mutate(half = sum(cnt)/2) |>
+  filter(cumulative_sum<=half)
+
+# Further filtering the dataset for these reasons
+delay_2022_filtered <- delay_2022_filtered |>
+  filter(code_desc %in% top_reasons$code_desc)
+
+
+# Convert character variables to factors for the regression model
+delay_2022_filtered$line <- as.factor(delay_2022_filtered$line)
+delay_2022_filtered$code_desc <- as.factor(delay_2022_filtered$code_desc)
+
+# Fit a linear regression model
+regression_model <- lm(min_delay ~ line + code_desc, data = delay_2022_filtered)
+
+# Output the summary of the model
+summary(regression_model)
+```
+## 3
+```{r}
+# Compaign Contribution
+res <- list_package_resources("e869d365-2c15-4893-ad2a-744ca867be3b")
+res <- res |> mutate(year = str_extract(name, "201.?"))
+compaign_2014_ids <- res |> filter(year==2014) |> select(id) |> pull()
+compaign_2014_ids
+```
+Now, we found data id.
+
+```{r}
+compaign_2014 <- get_resource("8b42906f-c894-4e93-a98e-acac200f34a4")
+# Data processing
+mayor_compaign_2014 <- compaign_2014$`2_Mayor_Contributions_2014_election.xls`
+colnames(mayor_compaign_2014) <- as.character(mayor_compaign_2014[1,]) # colnames are in the first row
+mayor_compaign_2014 <- mayor_compaign_2014[-1,]
+mayor_compaign_2014 <- clean_names(mayor_compaign_2014)
+# Final result
+head(mayor_compaign_2014)
+```
+## 4
+As we can see n_missing below, there are columns such as 'contributors_address',‘president_business_manager’,and ‘relationship_to_candidate’ which are almost blank. We should concern this issue becuase these missing values would significantly affect model performance. In addition, all covariates are character type. However, 'contribution_amount' should be numerical variable whereas 'contributor_type_desc' should be recorded as factor variable. Hence, we create new data-type-corrected variables 'contributor_type_desc_fac' and 'contribution_amount_num', respectly.
+```{r}
+# Summarize the data (find data type, number of missing data)
+skim(mayor_compaign_2014)
+
+# Create new variables
+mayor_compaign_2014$contributor_type_desc_fac <- as.factor(mayor_compaign_2014$contributor_type_desc)
+mayor_compaign_2014$contribution_amount_num <- as.numeric(mayor_compaign_2014$contribution_amount)
+```
+## 5
+We first see the distribution of the contribution. As we can see, it is extremly skewed distribution. Next, we determine outliers using IQR and upper whisker, and show the outliers in Box plot. Main outliers are contribution of over $500,000 done by Doug Ford and multiple contribution over 50,000 done by Rob Ford. They share similar characteristic that 'contributors_name' and 'candidate' are the same. It means that the outliers are contributions from the candidates themselves. Lastly, we plot historgram without outliers. 
+```{r}
+# Distribution
+ggplot(mayor_compaign_2014, aes(x = contribution_amount_num)) +
+  geom_histogram(binwidth = 50, colour = "black", fill = "white") +
+  theme_minimal() +
+  labs(x = "Contribution Amount", title = "Histogram of Contribution Amounts")
+
+library(scales)
+# Calculate IQR to determine outliers
+IQR_value <- IQR(mayor_compaign_2014$contribution_amount_num, na.rm = TRUE)
+upper_whisker <- quantile(mayor_compaign_2014$contribution_amount_num, 0.75, na.rm = TRUE) + 1.5 * IQR_value
+outliers <- mayor_compaign_2014 |>
+  filter(contribution_amount_num > upper_whisker) |>
+  arrange(desc(contribution_amount_num)) 
+
+# Boxplot with outlier names
+ggplot(mayor_compaign_2014, aes(x = "", y = contribution_amount_num)) +
+  geom_boxplot() +
+  geom_text(data = outliers, aes(label = contributors_name), nudge_y = 1, check_overlap = TRUE) +
+  scale_y_continuous(labels = scales::comma) +
+  theme_minimal() +
+  labs(y = "Contribution Amount", title = "Boxplot of Contribution Amounts with Outliers")
+
+# Characteristics of outliers
+head(outliers |> select(candidate, contributors_name))
+
+# Exclude outliers before plotting
+non_outliers <- mayor_compaign_2014 |>
+  filter(contribution_amount_num <= upper_whisker)
+
+# Plot histogram of contribution amounts without outliers
+ggplot(non_outliers, aes(x = contribution_amount_num)) +
+  geom_histogram(binwidth = 50, colour = "black", fill = "white") +
+  theme_minimal() +
+  labs(x = "Contribution Amount", title = "Histogram of Contribution Amounts (No Outliers)")
+```
+## 6
+```{r}
+# Calculate total contributions for each candidate
+total_contributions <- mayor_compaign_2014 |>
+  group_by(candidate) |>
+  summarize(total = sum(contribution_amount_num, na.rm = TRUE)) |>
+  arrange(desc(total)) |>
+  top_n(5)
+
+total_contributions
+# Calculate mean contribution for each candidate
+mean_contributions <- mayor_compaign_2014 |>
+  group_by(candidate) |>
+  summarize(mean = mean(contribution_amount_num, na.rm = TRUE)) |>
+  arrange(desc(mean)) |>
+  top_n(5)
+
+mean_contributions
+# Calculate the number of contributions for each candidate
+number_contributions <- mayor_compaign_2014 |>
+  group_by(candidate) |>
+  summarize(count = n()) |>
+  arrange(desc(count)) |>
+  top_n(5)
+
+number_contributions
+
+
+```
+## 7
+```{r}
+# First, identify contributions from the candidates themselves
+self_contributions <- mayor_compaign_2014 |>
+  filter(str_detect(contributors_name, candidate))
+
+# Exclude these self contributions and calculate total, mean, and count for each candidate
+mayor_compaign_no_self <- mayor_compaign_2014 |>
+  filter(!contributors_name %in% self_contributions$contributors_name)
+
+# Calculate total contributions for each candidate without self-contributions
+total_contributions_no_self <- mayor_compaign_no_self |>
+  group_by(candidate) |>
+  summarize(total = sum(contribution_amount_num, na.rm = TRUE)) |>
+  arrange(desc(total)) |>
+  top_n(5)
+
+total_contributions_no_self
+# Calculate mean contribution for each candidate without self-contributions
+mean_contributions_no_self <- mayor_compaign_no_self |>
+  group_by(candidate) |>
+  summarize(mean = mean(contribution_amount_num, na.rm = TRUE)) |>
+  arrange(desc(mean)) |>
+  top_n(5)
+
+mean_contributions_no_self
+# Calculate the number of contributions for each candidate without self-contributions
+number_contributions_no_self <- mayor_compaign_no_self |>
+  group_by(candidate) |>
+  summarize(count = n()) |>
+  arrange(desc(count)) |>
+  top_n(5)
+
+number_contributions_no_self
+
+```
+## 8
+```{r}
+# Group by contributors and count the number of unique candidates they donated to
+contributors_multiple_candidates <- mayor_compaign_2014 |>
+  group_by(contributors_name) |>
+  summarize(num_candidates = n_distinct(candidate)) |>
+  ungroup() |>
+  filter(num_candidates > 1)
+
+# Count the number of contributors who donated to more than one candidate
+num_contributors_multiple_candidates <- nrow(contributors_multiple_candidates)
+
+# Output the number
+num_contributors_multiple_candidates
+```

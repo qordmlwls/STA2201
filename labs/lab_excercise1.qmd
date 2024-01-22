@@ -47,7 +47,9 @@ lowest_mortality_age
 ```
 
 ## 3.
+
 We can calculate the standard deviation of mortality rates by age by running this code.
+
 ```{r}
 std_dev_mortality <- dm %>%
   group_by(Age) %>%
@@ -59,7 +61,9 @@ std_dev_mortality
 ```
 
 ## 4.
+
 As we can see in the graph, male mortality rates consistently higher than female rates throughout the period observed.
+
 ```{r}
 dm2 <- read_table("https://www.prdh.umontreal.ca/BDLC/data/ont/Population.txt", skip = 1)
 
@@ -88,11 +92,9 @@ ggplot(weighted_mortality, aes(x = Year)) +
 ```
 
 ## 5.
-For a simple linear regression model with logged mortality rates as the outcome and age as the covariate, the notation of the simple linear regression is:
-$$log(MortalityRate) = \beta_0 + \beta_1Age + \epsilon$$
-The output of the summary suggests that
-$\beta_0 = −10.062281$ and $\beta_1 = 0.086891$. 
-The positive coefficient for Age suggests that the log of the mortality rate increases as age increases, which implies that the mortality rate itself also increases exponentially with age. Given the context of mortality data, this result is consistent with general expectations: as age increases, the risk of mortality typically increases.
+
+For a simple linear regression model with logged mortality rates as the outcome and age as the covariate, the notation of the simple linear regression is: $$log(MortalityRate) = \beta_0 + \beta_1Age + \epsilon$$ The output of the summary suggests that $\beta_0 = −10.062281$ and $\beta_1 = 0.086891$. The positive coefficient for Age suggests that the log of the mortality rate increases as age increases, which implies that the mortality rate itself also increases exponentially with age. Given the context of mortality data, this result is consistent with general expectations: as age increases, the risk of mortality typically increases.
+
 ```{r}
 # Run the linear regression with logged mortality rates
 
