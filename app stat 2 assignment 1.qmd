@@ -1,0 +1,533 @@
+---
+title: "App stat 2 assignment 1"
+format: pdf
+editor: visual
+---
+
+## 1
+
+### a)
+
+Given that $Y | \theta \sim \text{Poisson}(\mu\theta)$, for the conditional distribution of $Y$ given $\theta$, we have:
+
+$E(Y|\theta) = \mu\theta, \text{Var}(Y|\theta) = \mu\theta$
+
+To find the unconditional expectation and variance of ( Y ), we use the law of total expectation and the law of total variance:
+
+$E(Y) = E(E(Y|\theta)), \text{Var}(Y) = E(\text{Var}(Y|\theta)) + \text{Var}(E(Y|\theta))$
+
+Substituting the known values for $E(\theta) = 1$ and $\text{Var}(\theta) = \sigma^2$, we get:
+
+$E(Y) = E(\mu\theta) = \mu E(\theta) = \mu$, $\text{Var}(Y) = E(\mu\theta) + \text{Var}(\mu\theta) = \mu E(\theta) + \mu^2 \text{Var}(\theta) = \mu + \mu^2\sigma^2$
+
+Thus, the expected value of $Y$ is $\mu$, and the variance of $Y$ is $\mu(1 + \mu\sigma^2)$, showing overdispersion relative to the Poisson distribution where the mean and variance are equal.
+
+### b)
+
+Assume $\theta$ is Gamma distributed with $\alpha$ and $\beta$ as shape and scale parameters, respectively. Show the unconditional distribution of $Y$ is Negative Binomial.
+
+$\theta \sim \text{Gamma}(\alpha, \beta)$
+
+The moment generating function (MGF) of $\theta$ is:
+
+$$ M_{\theta}(t) = (1 - \beta t)^{-\alpha} $$
+
+Given $Y | \theta$ is Poisson distributed, the MGF of $Y$ given $\theta$ is:
+
+$$ M_{Y|\theta}(t) = \exp\{\mu\theta(e^t - 1)\} $$
+
+To find the MGF of $Y$, we use the law of total expectation:
+
+$$ M_Y(t) = E[e^{tY}] = E[E[e^{tY}|\theta]] = E[\exp\{\mu\theta(e^t - 1)\}] = M_{\theta}(\mu(e^t - 1)) $$
+
+Substitute $M_{\theta}(t)$ into the above equation:
+
+$$ M_Y(t) = \left(\frac{1/ (1 + \beta\mu)}{1 - (1-1/(1 + \beta\mu))e^t}\right)^{\alpha} $$
+
+This is the MGF of a Negative Binomial distribution, which shows that $Y$ is Negative Binomially distributed. We denote this by:
+
+$$ Y \sim NB\left(\alpha, \frac{1}{1 + \beta\mu}\right) $$
+
+### c)
+
+Using the result $Y \sim NB\left(\alpha, \frac{1}{1 + \beta}\right)$, in order for $E(Y) = \mu$ and $Var(Y) = \mu(1 + \mu\sigma^2)$, we need to find what $\alpha$ and $\beta$ equal.
+
+The mean and variance of the Negative Binomial distribution are given by:
+
+$$
+E(Y) = \frac{\alpha(1 - \frac{1}{1 + \beta\mu})}{\frac{1}{1 + \beta\mu}} = \mu\alpha \beta
+$$ 
+
+$$
+Var(Y) = \frac{\alpha(1 - \frac{1}{1 + \beta\mu})}{\left(\frac{1}{1 + \beta\mu}\right)^2} = \alpha\mu \beta (1 + \beta\mu)
+$$
+
+By setting the mean and variance equal to $\mu$ and $\mu(1 + \mu\sigma^2)$ respectively, we have:
+
+$$
+\mu = \mu\alpha \beta
+$$
+
+$$
+\mu(1 + \mu\sigma^2) = \alpha\mu \beta (1 + \beta\mu)
+$$ Solving this, we get $\alpha = 1/\sigma^2$, $\beta = \sigma^2$
+
+```{r}
+# Load necessary packages
+library(tidyverse)
+library(janitor)
+```
+
+## 2
+
+### a)
+
+```{r}
+# Define sample size
+n_samples <- 1000
+
+# Generate log-normal distributed income
+average_log_income <- log(10000)
+std_dev_log_income <- log(100)
+incomes <- rnorm(n_samples, average_log_income, std_dev_log_income)
+
+# Generate log-normal distributed child support payments
+average_log_payments <- log(3500)
+std_dev_log_payments <- log(30)
+child_support_payments <- rnorm(n_samples, average_log_payments, std_dev_log_payments)
+
+# Plotting histograms for both datasets
+# Income distribution
+ggplot(data.frame(incomes), aes(x=incomes)) +
+  geom_histogram(bins=30, fill="red", color="black") +
+  labs(title="Income Distribution Histogram",
+       x="Income",
+       y="Frequency")
+
+# Child support payment distribution
+ggplot(data.frame(child_support_payments), aes(x=child_support_payments)) +
+  geom_histogram(bins=30, fill="blue", color="black") +
+  labs(title="Child Support Payment Distribution Histogram",
+       x="Payments",
+       y="Frequency")
+```
+
+### b)
+
+There is a red line that appears to be a line of best fit running horizontally across the plot, suggesting that there is no strong linear relationship between log income and log payments as the slope of the line is close to zero.
+
+```{r}
+# Scatter plot of income vs payments
+plot(incomes, child_support_payments, main="Log Income vs Log Payments",
+     xlab="Income", ylab="Payments", pch=19, col=rgb(0.2,0.4,0.6,0.6))
+
+# Linear regression model
+linear_fit <- lm(child_support_payments ~ incomes)
+abline(linear_fit, col="red")
+```
+
+### c)
+
+```{r}
+# Standardizing income and 3payments
+z_score_income <- scale(incomes)
+z_score_payments <- scale(child_support_payments)
+
+# Simulating a survey based on z-scores and random noise
+noise <- rnorm(n_samples)
+survey <- (z_score_income + z_score_payments + noise) > 0
+
+# Data aggregation and summarization
+survey_data <- data.frame(incomes, child_support_payments, survey)
+surveyed_means <- aggregate(cbind(incomes, child_support_payments) ~ survey, data=survey_data, mean)
+
+# Displaying summary statistics
+print(surveyed_means)
+```
+
+Surveying process, as modeled by the calculation, is indeed biased towards fathers with higher income and payment levels. In practice, this can mean that if the survey results were to be used to draw conclusions about the entire population of fathers, those conclusions could be skewed by this selection bias. It emphasizes the importance of understanding the sampling process when interpreting survey data.
+
+### d)
+
+Since the slope of the red line (surveyed fathers) is steeper than the slope of the blue line (all participants), it suggests that the relationship between income and payments is stronger in the surveyed subset than in the entire population. This could be because of the selection bias in the survey.
+
+```{r}
+# Regression for the entire dataset
+total_population_fit <- linear_fit
+
+# Regression for surveyed individuals only
+surveyed_subset <- survey_data[survey, ]
+fit_for_surveyed <- lm(child_support_payments ~ incomes, data=surveyed_subset)
+
+# Plotting the comparison
+plot(incomes, child_support_payments, main="Income's Impact on Payments",
+     xlab="Income", ylab="Payments", pch=19, col=rgb(0.2,0.4,0.6,0.6))
+
+# Adding regression lines
+abline(total_population_fit, col="blue")
+abline(fit_for_surveyed, col="red")
+
+# Including a legend
+legend("topright", legend=c("All Participants", "Surveyed Participants"),
+       col=c("blue", "red"), lwd=1)
+
+```
+
+### e)
+
+When survey data shows discrepancies like the sampling bias we have observed, it's a clear signal to researchers to examine the sampling process and to apply corrective measures in the analysis phase. This ensures that inferences drawn from the data are valid and applicable to the intended population.
+
+## 3
+
+### a)
+
+```{r}
+library(readxl)
+# Load the dataset
+hurricane_data <- read_xlsx("pnas.1402786111.sd01.xlsx")
+hurricane_data <- clean_names(hurricane_data)
+head(hurricane_data)
+```
+
+```{r}
+ggplot(hurricane_data, aes(x=mas_fem, y=alldeaths)) +
+  geom_point(color="blue")
+```
+
+Analysis reveals that hurricanes with female names show a greater variance in the number of death compared to those with male names. Hurricanes with neutral names demonstrate the lowest fatalities.
+
+```{r}
+ggplot(hurricane_data, aes(x=minpressure_updated_2014, y=alldeaths)) +
+  geom_point(color="green")
+```
+
+A trend is observed where hurricanes with lower minimum pressures result in higher fatalities. This is consistent with our understanding that lower pressure indicates a stronger hurricane.
+
+```{r}
+ggplot(hurricane_data, aes(x=ndam, y=alldeaths)) +
+  geom_point(color="red")
+```
+
+There is a correlation between higher normalized damage and increased fatalities. This aligns with the idea that normalized damage is a indicator for the fatalities of the hurricane.
+
+### b)
+
+The model shows the positive relationship between expected number of death for each unit and the Masculinity-Femininity Index (MFI), suggesting that hurricanes with more feminine names may be more deadly. Coefficient can be interpreted in a way that if each increase of the MFI, the deaths will increase multiplicatively by $e^{0.07387}$.
+
+```{r}
+pmodel <- glm(alldeaths ~ mas_fem, data = hurricane_data, family = poisson)
+summary(pmodel)$coefficients
+```
+
+```{r}
+
+
+# Checking for overdispersion
+resid_deviance <- sum(residuals(pmodel, type = "deviance")^2)
+df_resid <- pmodel$df.residual
+overdispersion_ratio <- resid_deviance / df_resid
+
+# Display the overdispersion ratio, shows overdispersion since 43 > 1
+overdispersion_ratio
+
+qpmodel <- glm(alldeaths ~ mas_fem, data=hurricane_data, family = quasipoisson)
+summary(qpmodel) 
+```
+
+The standard error of the coefficients experienced a significant increase, and the p-value for 'mas_fem' also rose sharply. This change led to 'mas_fem' becoming statistically insignificant, suggesting that the model no longer shows a connection between this index and the number of deaths.
+
+### c)
+
+```{r}
+library(MASS)
+model4 <- glm.nb(alldeaths ~ z_min_pressure_a + zndam + z_mas_fem + z_mas_fem*z_min_pressure_a + z_mas_fem*zndam, data = hurricane_data)
+coeffi <- model4$coefficients
+summary(model4)$coefficients
+```
+
+```{r}
+med_pressure <- median(hurricane_data$z_min_pressure_a, na.rm = TRUE)
+med_dam <- median(hurricane_data$zndam, na.rm = TRUE)
+
+c(med_pressure, med_dam)
+
+coeffi["z_mas_fem"] + coeffi["z_min_pressure_a:z_mas_fem"]*med_pressure + coeffi["zndam:z_mas_fem"]*med_dam
+```
+
+Using median values for minimum pressure and damage, the model suggests that with each unit increase in MFI, expected fatalities decrease by \$1 - e\^{-0.1626429} \\approx 15.01%\$ , indicating that more masculine-named hurricanes could potentially be more fatal.
+
+### d)
+
+```{r}
+hurricane_data <- na.omit(hurricane_data)
+
+new_data <- data.frame(
+  z_min_pressure_a =  hurricane_data[hurricane_data$name == "Sandy", "z_min_pressure_a"],
+  z_mas_fem = hurricane_data[hurricane_data$name == "Sandy", "z_mas_fem"],
+  zndam = hurricane_data[hurricane_data$name == "Sandy", "zndam"]
+)
+new_data
+
+deaths_pred <- predict(model4, newdata = new_data, type = "response")
+deaths_pred
+
+mean(hurricane_data$alldeaths)
+```
+
+For the specific case of Hurricane Sandy the model predicts the number of death of 20,807. This is inconsistent with the actual number of death of 159. It has low prediction performance.
+
+### e)
+
+Strengths:
+
+-   The study spans 62 years (1950-2012), offering a comprehensive dataset of hurricanes with varying severity and perceived gender names.
+
+-   Utilizing negative binomial regression for data analysis is appropriate given the overdispersed count nature of the data.
+
+Weaknesses:
+
+-   The gender perception of hurricane names can be subjective. Surveying more individuals to create a robust Masculinity-Femininity Index (MFI) would have been beneficial. Moreover, limiting the study to U.S. hurricanes restricts its global applicability.
+
+-   The dataset is not extensive enough to conclusively establish a link between hurricane fatality and gendered names. Many hurricanes, regardless of their perceived gender, have similar death counts, with only a few female-named storms showing higher fatalities. Important factors like hurricane path, width, and the population density of affected areas were not adequately considered. A more comprehensive approach would involve analyzing the proportionate impact of each hurricane.
+
+### f)
+
+The study's result is intriguing but not entirely convincing in its current form. The limited geographic focus on U.S. hurricanes, coupled with a dataset that might not adequately represent the full spectrum of hurricanes, raises questions about the robustness of the findings. Crucial factors like population density, the path and intensity of hurricanes, and evolving public response mechanisms over time were not sufficiently accounted for, potentially skewing the results. The predictive inaccuracy of the model, particularly in cases like Hurricane Sandy, also undermines the study's reliability. To enhance the testing of the hypothesis that hurricane names influence fatality rates, a multifaceted approach incorporating diverse data and analyses is essential. Global hurricane data would provide a broader perspective, assessing if the observed effects are consistent across different cultures.
+
+## 4
+
+### a)
+
+```{r}
+# Data load
+immigrant_data <- read.csv("98100468.csv")
+
+head(immigrant_data)
+```
+
+```{r}
+library(tidyverse)
+
+# Cleaning column names and removing specific columns
+immigrant_data <- clean_names(immigrant_data)
+drops <- c('symbol','symbol_1','symbol_2','symbol_3','symbol_4','symbol_5','symbol_6','symbol_7','symbol_8','symbol_9','symbol_10','ref_date')
+immigrant_data <- immigrant_data[ , !(names(immigrant_data) %in% drops)]
+head(immigrant_data)
+
+```
+
+```{r}
+# Renaming specific columns
+detach("package:MASS", unload=TRUE)
+immigrant_data <- immigrant_data |>
+    select(region = geo,
+           minority_group = visible_minority_15,
+           age = age_15a,    
+           gender = gender_3,
+           statistics = statistics_3,
+           commute = main_mode_of_commuting_11a,
+           non_immigrants = immigrant_status_and_period_of_immigration_11_non_immigrants_2,
+           immigrants = immigrant_status_and_period_of_immigration_11_immigrants_3,
+           non_permanent_residents = immigrant_status_and_period_of_immigration_11_non_permanent_residents_11,)
+
+
+# Filter for Census Metropolitan Areas and remove 'Total' categories
+immigrant_data <- immigrant_data |>
+  filter(grepl("(CMA)", region)) |>
+  filter(!grepl("Total", minority_group) & 
+         !grepl("Total", age) & 
+         !grepl("Total", gender)) |>
+  filter(statistics == "Count") |>
+  filter(commute %in% 
+           c("Car, truck or van", "Public transit", "Active transportation", "Other method"))
+
+# Create categories
+immigrant_data$immigrants_total <- immigrant_data$immigrants + immigrant_data$non_permanent_residents
+immigrant_data <- immigrant_data |>
+  select(
+    region,
+    minority_group,
+    age,
+    gender,
+    commute,
+    non_immigrants,
+    total_immigrants = immigrants_total
+  )
+
+immigrant_modified <- immigrant_data |>
+  mutate(transportation_type = ifelse(commute == "Public transit", "Public", "Non-Public")) |>
+  group_by(region, minority_group, age, gender, transportation_type) |>
+  summarise(
+    native_count = sum(non_immigrants), 
+    immigrant_count = sum(total_immigrants)
+  )
+
+
+# Pivoting and rearranging the dataset 'immigrant_long_form'
+immigrant_long_form <- immigrant_modified |>
+  pivot_longer(
+    cols = c('immigrant_count', 'native_count'),
+    names_to = "population_type",
+    values_to = "population_count"
+  ) |>
+  pivot_wider(
+    names_from = "transportation_type", 
+    values_from = "population_count"
+  )
+
+# Renaming columns and calculating total population
+commuting_data <- immigrant_long_form |>
+  rename(public_transport = Public, other_transport = `Non-Public`)
+commuting_data$total_population = commuting_data$public_transport + commuting_data$other_transport
+
+# Display the final dataset
+commuting_data
+
+```
+
+### b)
+
+-   Total Public Transport Use by Population Type: The bar chart indicates that immigrants have a higher total use of public transport compared to non-immigrants.
+
+-    Average Public Transport Use by Age Group: The line plot reveals that the average public transport use is higher among the middle age groups, with a peak in the 25 to 64 years category.
+
+-   Average Public Transport Use by Gender: There's a notable decline in public transport use among the older age group of 65 years and over. The bar chart demonstrates that on average, the Women+ category uses public transport more than the Men+ category.
+
+```{r}
+
+# Total Public Transport Use by Population Type
+public_transport_by_type <- commuting_data %>%
+  group_by(population_type) %>%
+  summarise(TotalPublicTransport = sum(public_transport))
+
+ggplot(public_transport_by_type, aes(x = population_type, y = TotalPublicTransport, fill = population_type)) +
+  geom_col() +
+  labs(title = "Total Public Transport Use by Population Type",
+       x = "Population Type",
+       y = "Total Public Transport Use") +
+  theme_minimal()
+
+# Average Public Transport Use by Age Group
+public_transport_by_age <- commuting_data %>%
+  group_by(age) %>%
+  summarise(AveragePublicTransport = mean(public_transport))
+
+ggplot(public_transport_by_age, aes(x = age, y = AveragePublicTransport)) +
+  geom_line(group = 1) +
+  geom_point() +
+  labs(title = "Average Public Transport Use by Age Group",
+       x = "Age Group",
+       y = "Average Public Transport Use") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Average Public Transport Use by Gender
+public_transport_by_gender <- commuting_data %>%
+  group_by(gender) %>%
+  summarise(AveragePublicTransport = mean(public_transport))
+
+ggplot(public_transport_by_gender, aes(x = gender, y = AveragePublicTransport, fill = gender)) +
+  geom_col() +
+  labs(title = "Average Public Transport Use by Gender",
+       x = "Gender",
+       y = "Average Public Transport Use") +
+  theme_minimal()
+```
+
+### c)
+
+The outcome variable is public_transport, which represents the count of individuals using public transportation. A count data outcome is appropriate for Poisson or Quasi-Poisson regression models, as these models are designed for non-negative integer outcomes. The initial assumption was that the outcome variable followed a Poisson distribution, which assumes the mean and variance of the count data are equal. However, the overdispersion ratio (residual deviance divided by the degrees of freedom) was found to be significantly greater than 1, indicating overdispersion. This justifies the use of a Quasi-Poisson model, which relaxes the Poisson assumption by allowing the variance to be a function of the mean. The model includes covariates such as region, age, gender, population type (tentative count), and minority group. These covariates were likely chosen based on exploratory data analysis (EDA) findings that suggested these factors could influence the use of public transport. For example, different age groups may have different commuting patterns, gender may influence transportation preferences or needs, population type could capture the differences between immigrants and non-immigrants, and minority group status may reflect socio-economic factors affecting public transport usage. 
+
+```{r}
+poisson_model <- glm(public_transport ~ region + age + gender + population_type + minority_group, 
+                     family = "poisson", 
+                     data = commuting_data)
+
+# Checking for overdispersion
+resid_deviance <- sum(residuals(poisson_model, type = "deviance")^2)
+df_resid <- poisson_model$df.residual
+overdispersion_ratio <- resid_deviance / df_resid
+
+# Display the overdispersion ratio, shows overdispersion since 85 > 1
+overdispersion_ratio
+```
+
+```{r}
+quasi_poisson_model <- glm(public_transport ~ age + gender + population_type + minority_group + region, 
+                           family = "quasipoisson", 
+                           data = commuting_data)
+
+# Summary of the Quasi-Poisson model
+summary(quasi_poisson_model)
+```
+Different age groups have varying effects on the use of public transport. For example, age groups "25 to 54 years" and "25 to 64 years" show a positive association, indicating higher usage rates among these age brackets compared to the reference group (likely "15 to 24 years" based on the coefficients provided). The positive coefficient for "genderWomen+" suggests that women are more likely to use public transport compared to men, holding other factors constant. The negative coefficient for "population_typetentative_count" could indicate that a higher tentative count (possibly non-immigrants) is associated with lower public transport usage. The coefficients for minority groups indicate that some minority groups are more or less likely to use public transport compared to the reference group (likely "Not a visible minority"). For instance, the "minority_groupNot a visible minority" has a significantly high positive coefficient, suggesting a much higher likelihood of using public transport compared to visible minorities.
+
+```{r}
+# Plotting actual vs. predicted counts
+actual <- commuting_data$public_transport
+predicted <- predict(quasi_poisson_model, type = "response")
+
+ggplot(commuting_data, aes(x = actual, y = predicted)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "Actual vs. Predicted Public Transport Usage",
+       x = "Actual Count",
+       y = "Predicted Count")
+```
+The variability in predictions at higher counts suggests that there may be other forms of nonlinearity or variability not accounted for by the model.
+
+### d)
+
+```{r}
+
+# Filter the dataset for the specified demographic group in Edmonton and Toronto
+edmonton_data <- commuting_data %>%
+  filter(region == "Edmonton (CMA), Alta.",
+         age == "35 to 44 years",
+         gender == "Men+",
+         population_type == "native_count",
+         minority_group == "Not a visible minority")
+
+toronto_data <- commuting_data %>%
+  filter(region == "Toronto (CMA), Ont.",
+         age == "35 to 44 years",
+         gender == "Men+",
+         population_type == "native_count",
+         minority_group == "Not a visible minority")
+
+# Predict the number of individuals using public transit
+edmonton_pred <- predict(quasi_poisson_model, newdata = edmonton_data, type = "response")
+toronto_pred <- predict(quasi_poisson_model, newdata = toronto_data, type = "response")
+
+# Calculate the proportions for Edmonton and Toronto
+edmonton_proportion <- sum(edmonton_pred) / sum(edmonton_data$total_population)
+toronto_proportion <- sum(toronto_pred) / sum(toronto_data$total_population)
+
+# Print the predicted proportions
+print(paste("Predicted proportion for Edmonton:", edmonton_proportion))
+print(paste("Predicted proportion for Toronto:", toronto_proportion))
+
+```
+
+The result of the Quasi-Poisson regression model predicts that approximately 1.1% of men in Edmonton who are aged 35-44, are not from a visible minority, and are not immigrants use public transit. In comparison, for the same demographic in Toronto, the predicted proportion is approximately 6%. The predicted proportions are within a plausible range for public transit usage, which suggests that the model is providing reasonable estimates.
+
+### e)
+
+This model could be used for:
+
+- Policy Development: To help policymakers understand public transit utilization patterns and develop targeted initiatives to encourage public transit use. 
+- Social Research: To study the mobility patterns of various population segments, contributing to research on social inclusion and urban mobility.
+
+Limitations of the Model The model has several limitations:
+
+- Omitted Variables: Important predictors such as income, occupation, distance to transit stops, and service quality were not included. These could significantly influence public transit use. 
+- CMA-Level Aggregation: The analysis was conducted at the CMA level, which may mask local variations within CMAs. 
+- Causality: The regression model identifies correlations but does not establish causality.
+
+Variables of Interest for Future Investigation Future models could benefit from including variables such as:
+
+- Socioeconomic Factors: Income levels, employment status, or car ownership could influence public transit usage. 
+- Geographic Data: Distance to the nearest transit stop or the density of the transit network might affect usage patterns.
+- Service Attributes: Frequency, reliability, and coverage of public transit services can play a significant role. 
+
+By incorporating these additional variables, future models could provide a more comprehensive understanding of public transit usage patterns and allow for more accurate predictions and better-informed decision-making.
