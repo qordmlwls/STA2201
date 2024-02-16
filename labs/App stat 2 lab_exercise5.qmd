@@ -1,0 +1,363 @@
+---
+title: "App stat lab exercise 5"
+format: pdf
+editor: visual
+---
+
+
+```{r}
+library(tidyverse)
+library(rstan)
+library(tidybayes)
+library(here)
+```
+
+```{r}
+# Data load
+kidiq <- read_rds("data/kidiq.RDS")
+head(kidiq)
+
+```
+
+
+## 1.
+We first use historgram to see distribution of Kid's Scores. Since the distribution is not much different from normal distribution, we could assume that Kid's Scores follow normal distribution. (We assume Normal likelihood)
+```{r}
+ggplot(kidiq, aes(x = kid_score)) + 
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Kid's Scores", x = "Kid Score", y = "Frequency")
+
+
+```
+Maybe Mother's eduacation level affect kid's score. Let's see Basic statistics. Mean kid score is higer if Mother's education is ar least high school.
+
+```{r}
+kidiq |> 
+  group_by(mom_hs) |>
+  summarize(mean_kid_score = mean(kid_score))
+```
+Let's see this relationship in graph. As we can see, there is positive correlation beween kid's score and Mother's IQ overall. The slopes of the two regression lines (one for each group) are positive, which reinforces the observation of a positive correlation. Additionally, the regression line for the mothers who completed high school (red line) is positioned higher than the line for mothers who did not complete high school (blue line), suggesting that completing high school is associated with higher scores for the children, independent of the mother's IQ.
+```{r}
+kidiq |>
+  ggplot(aes(x = mom_iq, y = kid_score, color = as.factor(mom_hs))) +
+  geom_point() +
+  geom_smooth(method = 'lm', aes(group = mom_hs)) +
+  labs(title = "Mother's IQ vs Kid's Scores by Mother's Education Level",
+       y = "Kid's score",
+       x = "Mother's IQ",
+       color = "Mother's HS Completion") +
+  scale_color_manual(values = c('0' = 'blue', '1' = 'red'),
+                     labels = c('0' = 'No HS', '1' = 'HS Completed'))
+
+```
+### Estimating mean, no covariates
+```{r}
+y <- kidiq$kid_score
+mu0 <- 80
+sigma0 <- 10
+
+# named list to input for stan function
+data <- list(y = y, 
+             N = length(y), 
+             mu0 = mu0,
+             sigma0 = sigma0)
+```
+
+Now we can run the model:
+
+```{r}
+fit <- stan(file = "code/models/kids2.stan",
+            data = data,
+            # reducing the iterations a bit to speed things up
+            chains = 3,
+            iter = 500)
+```
+
+Look at the summary
+
+```{r}
+fit
+```
+
+Traceplot
+
+```{r}
+traceplot(fit)
+```
+
+All looks fine.
+
+```{r}
+pairs(fit, pars = c("mu", "sigma"))
+```
+
+```{r}
+stan_dens(fit, separate_chains = TRUE)
+```
+
+## Understanding output
+
+What does the model actually give us? A number of samples from the
+posteriors. To see this, we can use `extract` to get the samples.
+
+```{r}
+post_samples <- extract(fit)
+names(post_samples)
+head(post_samples[["mu"]])
+```
+
+This is a list, and in this case, each element of the list has 4000
+samples. E.g. quickly plot a histogram of mu
+
+```{r}
+hist(post_samples[["mu"]])
+median(post_samples[["mu"]])
+# 95% bayesian credible interval
+quantile(post_samples[["mu"]], 0.025)
+quantile(post_samples[["mu"]], 0.975)
+```
+
+Tidybayes is also very useful:
+
+```{r}
+fit |> 
+  gather_draws(mu, sigma) |> 
+  median_qi(.width = 0.8)
+```
+
+## Plot estimates
+
+There are a bunch of packages, built-in functions that let you plot the
+estimates from the model, and I encourage you to explore these options
+(particularly in `bayesplot`, which we will most likely be using later
+on). I like using the `tidybayes` package, which allows us to easily get
+the posterior samples in a tidy format (e.g. using gather draws to get
+in long format). Once we have that, it's easy to just pipe and do
+ggplots as usual.
+
+Get the posterior samples for mu and sigma in long format:
+
+```{r}
+dsamples <- fit  |> 
+  gather_draws(mu, sigma) # gather = long format
+dsamples
+
+# wide format
+fit  |>  spread_draws(mu, sigma)
+
+# quickly calculate the quantiles using 
+
+dsamples |> 
+  median_qi(.width = 0.8)
+```
+
+Let's plot the density of the posterior samples for mu and add in the
+prior distribution
+
+```{r}
+dsamples |> 
+  filter(.variable == "mu") |> 
+  ggplot(aes(.value, color = "posterior")) + geom_density(size = 1) + 
+  xlim(c(70, 100)) + 
+  stat_function(fun = dnorm, 
+        args = list(mean = mu0, 
+                    sd = sigma0), 
+        aes(colour = 'prior'), size = 1) +
+  scale_color_manual(name = "", values = c("prior" = "red", "posterior" = "black")) + 
+  ggtitle("Prior and posterior for mean test scores") + 
+  xlab("score")
+  
+```
+## 2.
+Let's say we know that relationship are clear and there is little variance. We can encode this by:
+
+```{r}
+sigma0 <- 0.01
+
+data <- list(y = y, 
+             N = length(y), 
+             mu0 = mu0,
+             sigma0 = sigma0)
+fit <- stan(file = "code/models/kids2.stan",
+            data = data)
+```
+Both estimates of mu and sigma are changed.
+```{r}
+fit
+```
+Compared to the posterior when we set sigma0 = 10, we get distribution that has much smaller variance.
+```{r}
+# Get the posterior samples for mu and sigma
+dsamples <- fit  |> 
+  gather_draws(mu, sigma) 
+# Plot 
+dsamples |> 
+  filter(.variable == "mu") |> 
+  ggplot(aes(.value, color = "posterior")) + geom_density(size = 1) + 
+  xlim(c(70, 100)) + 
+  stat_function(fun = dnorm, 
+        args = list(mean = mu0, 
+                    sd = sigma0), 
+        aes(colour = 'prior'), size = 1) +
+  scale_color_manual(name = "", values = c("prior" = "red", "posterior" = "black")) + 
+  ggtitle("Prior and posterior for mean test scores") + 
+  xlab("score")
+```
+
+### Adding covariates
+
+Now let's see how kid's test scores are related to mother's education.
+We want to run the simple linear regression
+
+$$
+y_i|\mu_i, \sigma^2 \sim N(\mu_i, \sigma^2)
+$$
+
+$$
+\mu_i = \alpha + \beta X_i
+$$ 
+Priors: 
+$$
+\alpha \sim N(0, 100^2)
+$$ 
+
+$$
+\beta\sim N(0, 10^2)
+$$ 
+$$
+\sigma \sim N(0, 10^2)
+$$
+
+where $X = 1$ if the mother finished high school and zero otherwise.
+
+`kid3.stan` has the stan model to do this. Notice now we have some
+inputs related to the design matrix $X$ and the number of covariates (in
+this case, it's just 1).
+
+Let's get the data we need and run the model.
+
+```{r}
+X <- as.matrix(kidiq$mom_hs, ncol = 1) # force this to be a matrix
+K <- 1
+
+data <- list(y = y, N = length(y), 
+             X =X, K = K)
+fit2 <- stan(file = "code/models/kids3.stan",
+            data = data, 
+            iter = 1000)
+
+fit2
+traceplot(fit2)
+```
+## 3.
+Both lm() and fits show the similar coefficient of beta (slope) and alpha (intercept), which are about 11 and 77, respectively. 
+```{r}
+summary(fit2)
+linear <- lm(y~kidiq$mom_hs)
+summary(linear)
+```
+It seems that they are correlated, which could be problematic. High correlation between parameters can lead to reduced sampling efficiency because we will get narrower results when sampling. 
+```{r}
+pairs(fit2, pars = c("alpha", "beta[1]"))
+```
+
+### Plotting results
+
+It might be nice to plot the posterior samples of the estimates for the
+non-high-school and high-school mothered kids. Here's some code that
+does this: notice the `beta[condition]` syntax. Also notice I'm using
+`spread_draws`, because it's easier to calculate the estimated effects
+in wide format
+
+```{r}
+fit2 |>
+  spread_draws(alpha, beta[k], sigma) |> 
+     mutate(nhs = alpha, # no high school is just the intercept
+          hs = alpha + beta) |> 
+  select(nhs, hs) |> 
+  pivot_longer(nhs:hs, names_to = "education", values_to = "estimated_score") |> 
+  ggplot(aes(y = education, x = estimated_score)) +
+  stat_halfeye() + 
+  theme_bw() + 
+  ggtitle("Posterior estimates of scores by education level of mother")
+
+
+fit2 |>
+  spread_draws(alpha, beta[k], sigma) |> 
+     mutate(nhs = alpha, # no high school is just the intercept
+          hs = alpha + beta) |> 
+  select(nhs, hs) |> 
+  pivot_longer(nhs:hs, names_to = "education", values_to = "estimated_score") |> 
+  ggplot(aes(x = estimated_score, fill = education)) +
+  geom_density()
+  
+```
+## 4.
+
+Mom's IQ has coefficient of 0.5638947, which suggest that if centered mom's IQ increases by one unit, the expected kid's test score increases about 0.56, holding all other variables constant. 
+
+```{r}
+# Centering
+X <- cbind(kidiq$mom_hs, kidiq$mom_iq - mean(kidiq$mom_iq))
+data <- list(y = y,
+             N = length(y),
+             K = 2,
+             X = as.matrix(X))
+
+fit2 <- stan(file = "code/models/kids3.stan",
+            data = data, 
+            iter = 1000)
+
+summary(fit2)
+```
+
+## 5. 
+The result agrees with 'lm()'
+```{r}
+linear <- lm(y ~ X[,1] +  X[,2])
+summary(linear)
+```
+
+## 6. 
+Plot the posterior estimates of scores by education of mother for mothers who have an IQ of 110. 
+
+
+```{r}
+
+fit2 |>
+  spread_draws(alpha, beta[k], sigma) |> 
+  pivot_wider(names_from = k, values_from = beta,  names_glue = "beta{k}") |>
+  mutate(nhs=alpha+beta2*(110-mean(kidiq$mom_iq)),
+         hs=alpha+beta1+beta2*(110-mean(kidiq$mom_iq)))|>
+  select(nhs, hs) |> 
+  pivot_longer(nhs:hs, names_to = "education", values_to = "estimated_score") |> 
+  ggplot(aes(y = education, x = estimated_score)) +
+  stat_halfeye() + 
+  theme_bw() + 
+  ggtitle("Posterior estimates of scores by education level of mother")
+  
+# Using `spread_draws` to extract the relevant draws from the model.
+posterior <- fit2 |>
+  spread_draws(alpha, beta[k], sigma) |> 
+  # Adjust for mother's IQ of 110 (centered around the mean)
+  mutate(iq_adjustment = 110 - mean(kidiq$mom_iq)) |>
+  mutate(estimate_nhs = alpha + iq_adjustment * beta[2], # Estimate for mothers without high school
+         estimate_hs = alpha + iq_adjustment * beta[2] + beta[1]) %>%  # Estimate for mothers with high school
+  select(estimate_nhs, estimate_hs) |> 
+  pivot_longer(estimate_nhs:estimate_hs, names_to = "education", values_to = "estimated_score")
+
+# Plot the estimates
+ggplot(posterior, aes(y = education, x = estimated_score)) +
+  stat_halfeye() + 
+  theme_bw() + 
+  ggtitle("Posterior estimates of scores by education level of mother for IQ = 110")
+```
+## 7.
+```{r}
+samples <- extract(fit2)
+pred <- samples[["alpha"]] + samples[["beta"]][,1] + (95-mean(kidiq$mom_iq))*samples[["beta"]][,2]
+sigma <- samples[["sigma"]]
+y_pred <- tibble(y_pred = rnorm(length(sigma), mean = pred, sd = sigma))
+ggplot(y_pred, aes(y_pred)) + geom_histogram(fill = "skyblue", col = "blue") + ggtitle("Distribution of Predicted Scores with Mother's IQ = 95")
+
+```
