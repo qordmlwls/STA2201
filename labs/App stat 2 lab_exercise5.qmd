@@ -328,10 +328,11 @@ Plot the posterior estimates of scores by education of mother for mothers who ha
 # Using `spread_draws` to extract the relevant draws from the model.
 posterior <- fit2 |>
   spread_draws(alpha, beta[k], sigma) |> 
+  pivot_wider(names_from = k, values_from = beta,  names_glue = "beta{k}") |>
   # Adjust for mother's IQ of 110 (centered around the mean)
   mutate(iq_adjustment = 110 - mean(kidiq$mom_iq)) |>
-  mutate(estimate_nhs = alpha + iq_adjustment * beta[2], # Estimate for mothers without high school
-         estimate_hs = alpha + iq_adjustment * beta[2] + beta[1]) |>  # Estimate for mothers with high school
+  mutate(estimate_nhs = alpha + iq_adjustment * beta2, # Estimate for mothers without high school
+         estimate_hs = alpha + iq_adjustment * beta2 + beta1) |>  # Estimate for mothers with high school
   select(estimate_nhs, estimate_hs) |> 
   pivot_longer(estimate_nhs:estimate_hs, names_to = "education", values_to = "estimated_score")
 
@@ -341,6 +342,8 @@ ggplot(posterior, aes(y = education, x = estimated_score)) +
   theme_bw() + 
   ggtitle("Posterior estimates of scores by education level of mother for IQ = 110")
 ```
+
+
 ## 7.
 ```{r}
 samples <- extract(fit2)
