@@ -172,7 +172,7 @@ dsamples |>
 Let's say we know that relationship are clear and there is little variance. We can encode this by:
 
 ```{r}
-sigma0 <- 0.01
+sigma0 <- 0.1
 
 data <- list(y = y, 
              N = length(y), 
@@ -324,25 +324,14 @@ Plot the posterior estimates of scores by education of mother for mothers who ha
 
 ```{r}
 
-fit2 |>
-  spread_draws(alpha, beta[k], sigma) |> 
-  pivot_wider(names_from = k, values_from = beta,  names_glue = "beta{k}") |>
-  mutate(nhs=alpha+beta2*(110-mean(kidiq$mom_iq)),
-         hs=alpha+beta1+beta2*(110-mean(kidiq$mom_iq)))|>
-  select(nhs, hs) |> 
-  pivot_longer(nhs:hs, names_to = "education", values_to = "estimated_score") |> 
-  ggplot(aes(y = education, x = estimated_score)) +
-  stat_halfeye() + 
-  theme_bw() + 
-  ggtitle("Posterior estimates of scores by education level of mother")
-  
+
 # Using `spread_draws` to extract the relevant draws from the model.
 posterior <- fit2 |>
   spread_draws(alpha, beta[k], sigma) |> 
   # Adjust for mother's IQ of 110 (centered around the mean)
   mutate(iq_adjustment = 110 - mean(kidiq$mom_iq)) |>
   mutate(estimate_nhs = alpha + iq_adjustment * beta[2], # Estimate for mothers without high school
-         estimate_hs = alpha + iq_adjustment * beta[2] + beta[1]) %>%  # Estimate for mothers with high school
+         estimate_hs = alpha + iq_adjustment * beta[2] + beta[1]) |>  # Estimate for mothers with high school
   select(estimate_nhs, estimate_hs) |> 
   pivot_longer(estimate_nhs:estimate_hs, names_to = "education", values_to = "estimated_score")
 
@@ -359,5 +348,4 @@ pred <- samples[["alpha"]] + samples[["beta"]][,1] + (95-mean(kidiq$mom_iq))*sam
 sigma <- samples[["sigma"]]
 y_pred <- tibble(y_pred = rnorm(length(sigma), mean = pred, sd = sigma))
 ggplot(y_pred, aes(y_pred)) + geom_histogram(fill = "skyblue", col = "blue") + ggtitle("Distribution of Predicted Scores with Mother's IQ = 95")
-
 ```
