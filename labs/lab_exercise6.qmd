@@ -249,7 +249,9 @@ mod2 <- stan(data = stan_data,
              iter = 500,
              seed = 243)
 ```
+The model's intercept (beta[1]) and the coefficients for gestational age (beta[2]) and prematurity (beta[3]) contribute to the prediction of log birth weight, with positive associations indicated by their mean estimates. In addition, the Rhat values are all close to or exactly 1, which typically suggests that the chains have converged.
 
+The interaction term beta[4] has a mean estimate of 0.1969, which implies that the effect of gestational age on birth weight is different for preterm babies than for full-term babies. Specifically, the slope of the relationship is steeper for preterm births compared to full-term births, indicating that each additional week of gestation is associated with a greater increase in birth weight for preterm births than for full-term births. This result agrees with plot in Question 1.
 ```{r}
 summary(mod2)$summary[c("beta[1]", "beta[2]", "beta[3]", "beta[4]", "sigma"),]
 ```
@@ -366,7 +368,7 @@ loo2 <- loo(loglik2, save_psis = TRUE)
 loo_compare(loo1, loo2)
 ```
 
-We can see that model2 is better.
+When compared to Model 1, Model 2 has an elpd_diff of -175.1 with a standard error of the difference (se_diff) of 36.4. This indicates that Model 2 is expected to have a higher predictive performance by 175.1 log points on the  Expected Log Predictive Density (ELPD) scale than Model 1, which is a substantial difference.
 
 We can also compare the LOO-PIT of each of the models to standard uniforms. For example for Model 1:
 
@@ -376,7 +378,10 @@ ppc_loo_pit_overlay(yrep = yrep1, y = y, lw = weights(loo1$psis_object))
 
 ## Bonus question (not required)
 
-Create your own PIT histogram "from scratch" for Model 2. \## 9.
+Create your own PIT histogram "from scratch" for Model 2. 
+
+
+## 9.
 
 Based on the original dataset, choose one (or more) additional covariates to add to the linear regression model. Run the model in Stan, and compare with Model 2 above on at least 2 posterior predictive checks.
 
