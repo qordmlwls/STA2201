@@ -22,18 +22,18 @@ model {
   // taking into account measurement error
   y ~ normal(mu[year_i], se);
   
-  mu[1] ~ normal(0, 1);
+  mu[1] ~ normal(0, sigma);
   // second order
-  mu[2] ~ normal(0, 1);
+  mu[2] ~ normal(0, sigma);
   mu[3:T] ~ normal(2*mu[2:(T-1)] - mu[1:(T-2)], sigma);
   sigma ~ normal(0, 1);
 }
 
 generated quantities {
   vector[P] mu_p;
-  mu_p[1] = normal_rng(mu[T-1], sigma);
-  mu_p[2] = normal_rng(mu[T], sigma);
+  mu_p[1]=normal_rng(2*mu[T]-mu[T-1], sigma);
+  mu_p[2]=normal_rng(2*mu_p[1]-mu[T], sigma);
   for (i in 3:P){
-    mu_p[i] = normal_rng(2*mu[(i-1)] - mu[(i-2)], sigma);
+    mu_p[i] = normal_rng(2*mu_p[(i-1)] - mu_p[(i-2)], sigma);
   }
 }

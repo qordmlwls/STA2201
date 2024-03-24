@@ -21,7 +21,7 @@ model {
   // taking into account measurement error
   y ~ normal(mu[year_i], se);
   
-  mu[1] ~ normal(0, 1);
+  mu[1] ~ normal(0, sigma);
   mu[2:T] ~ normal(mu[1:(T-1)], sigma);
   sigma ~ normal(0, 1);
 }
